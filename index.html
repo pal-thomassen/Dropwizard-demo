@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>DropWizard</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+    <script src="https://github.com/downloads/gnab/remark/remark-0.4.1.min.js" type="text/javascript"></script>
+    <script src="http://cloud.github.com/downloads/kjbekkelund/remark-bekk/bekk-0.0.4.js" type="text/javascript"></script>
+    <link href="http://cloud.github.com/downloads/kjbekkelund/remark-bekk/bekk-0.0.4.css" type="text/css" rel="stylesheet">
+    <style type="text/css" media="screen">
+      /* Slideshow styles */
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# DropWizard
+
+## 2012 &mdash; 19. September 2012
+
+Pål Thomassen
+
+---
+
+# Agenda
+
+1. **Hva er DropWizard**
+2. Fete Jar-filer
+3. Fordeler for OPS
+4. Oppsummering
+
+---
+
+# Hva er DropWizard
+
+Laget av folka bak Yammer!
+
+![](images/yammer.jpg)
+
+---
+
+# Integrerer en rekke kjente verktøy
+
+* Jetty for HTTP
+* Jersey for REST
+* Jackson for JSON
+* Metrics for metrics - Laget av Yammer
+* Guava
+* Logback
+* Hibernate Valdiator
+* JDBI - Database, kjenner jeg lite til...
+* Freemarker - HTML templates
+
+---
+
+DropWizard lager services (Rest-tjenester).
+
+En tjeneste kan være uavhengig av andre prosesser og kan leve helt for seg selv. 
+
+En tjeneste kan inneholder en eller flere resurser som er de data som sendes av tjenesten.
+
+Ofte inneholder også en service noen health checks som kan brukes som smoketests for å sjekke at f.eks databasetilkobling fungerer. 
+
+---
+
+# Konfigurasjon av en service
+
+Konfigurasjon skjer gjennom en kombinasjon av en vanlig java-klasse som parser en YAML-fil med selve parametrene.
+
+
+    public class HelloWorldConfiguration extends Configuration {
+        @NotEmpty
+        @JsonProperty
+        private String template;
+
+        public String getDefaultName() {
+            return defaultName;
+        }
+    }
+
+Og template filen
+
+    template: Hello, %s!
+
+---
+
+# Oppsett av services
+
+    public class SynneDataService extends Service<SynneDataConfiguration> {
+
+        public static void main(String[] args) throws Exception {
+            new SynneDataService().run(args);
+        }
+
+        public SynneDataService() {
+            super("SynneData");
+            addBundle(new ViewBundle());
+        }
+
+        @Override
+        protected void initialize(SynneDataConfiguration configuration,
+                                  Environment environment) {
+
+            environment.addResource(new SynneDataResource(
+                    new TemperatureMeasurementStorage(new ArrayList<TemperatureMeasurement>())));
+            environment.addHealthCheck(new TemperatureMeasurementHealthCheck(
+                new TemperatureMeasurementStorage(new ArrayList<TemperatureMeasurement>())));
+        }
+---
+
+# Resurser er vanlige Jersey-resurser
+
+    @Path("/temperatures")
+    @Produces(MediaType.APPLICATION_JSON)
+    public class SynneDataResource {
+        private final TemperatureMeasurementStorage temperatureMeasurementStorage;
+
+        public SynneDataResource(TemperatureMeasurementStorage temperatureMeasurementStorage) {
+            this.temperatureMeasurementStorage = temperatureMeasurementStorage;
+        }
+
+        @GET
+        @Timed
+        public List<TemperatureMeasurement> getTemperatures(
+                @QueryParam("lowestTemperature") @DefaultValue("0")IntParam lowestTemperature,
+                @QueryParam("highestTemperature") @DefaultValue("40")IntParam highestTemperature ) {
+
+            List<TemperatureMeasurement> measurementList =
+                    temperatureMeasurementStorage.getTemperatureMeasurementList(
+                        lowestTemperature.get(),
+                        highestTemperature.get());
+
+            return measurementList;
+        }
+
+---
+# Agenda
+
+1. Hva er DropWizard
+2. **Fete Jar-filer**
+3. Fordeler for OPS
+4. Oppsummering
+
+---
+# Fete Jar-filer 
+
+![](images/fat-jar.jpeg)
+
+---
+# Fete Jar-filer
+
+Fete Jar-filer er ikke dropwizard spesifikt.
+
+## Fordeler
+
+* Pakker App-server med i Jar-filen
+* DropWizard bruker Jetty
+* Du har selv kontrol på main-metoden
+* Du har full kontrol på biblioteker (Ikke AppServer spesifikke)
+* Ingen forskjell på utviklng og prod.
+
+##
+
+Ulemper
+
+* Må pakke med alt i Jar-filen.
+* Kan være features i weblogic, tomcat etc du vil ha.
+* Du må skrive main-metoden (Om du ikke bruker DropWizard)
+
+---
+# Agenda
+
+1. Hva er DropWizard
+2. Fete Jar-filer
+3. **Fordeler for OPS**
+4. Oppsummering
+
+---
+
+# Type OPS som vil like dette
+
+![](images/neckbeard.png)
+
+---
+
+# Type OPS som vil like dette
+
+* Kan enkelt lage UNIX-script for å starte og stoppe tjenesten.
+* Logger laget av Yammer er grep og tail-vennlig
+* YAML er veldig enkle configfiler å endre
+* Morsomme ASCII-Banners når jar-filen starter.
+* Slipper å bruke fancy appserver-gui
+
+Eksempel på syslog-konfigurasjon
+
+    logging:
+
+      # Settings for logging to syslog.
+      syslog:
+
+        # If true, write log statements to syslog.
+        enabled: false
+
+        # Do not write log statements below this threshold to syslog.
+        threshold: ALL
+
+        # The hostname of the syslog server to which statements will be sent.
+        # N.B.: If this is the local host, the local syslog instance will need to be configured to
+        # listen on an inet socket, not just a Unix socket.
+        host: localhost
+
+        # The syslog facility to which statements will be sent.
+        facility: local0
+
+---
+# Agenda
+
+1. Hva er DropWizard
+2. Fete Jar-filer
+3. Fordeler for OPS
+4. **Oppsummering**
+
+---
+# Oppsummering
+
+* Dropwizard er verdt å ta en nærmere titt på.
+* Bør vurderes enda bedre fordeler og ulemper med Jetty i prod
+* Integrerer mange robuste og stabile verktøy som allerede brukes.
+
+    </textarea>
+    <div id="slideshow"></div>
+  </body>
+</html>
